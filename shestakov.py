@@ -9,6 +9,7 @@ class CPU:
 
         #                 OpA   OpB    OpPip resH  resL  Res
         self.curr_value = [None, None, None, None, None, None]
+        self.curr_value_before = [None, None, None, None, None, None]
         self.before_using = [None, ["", None], ["", None], [""], ["", None, None]]
         self.before_res = [None, None, None]
         # Инициализация RF как указано
@@ -87,17 +88,20 @@ class CPU:
     def decode1_before(self):
         """2 такт: выборка первого операнда"""
 
+        self.curr_value_before[0] = self.operand1
+        self.curr_value_before[2] = self.pipeline_operand
+
         if self.buffer[1]:
             opcode = self.buffer[1][0]
             self.before_using[1][0] = opcode
             if self.before_using[1][0] == "MTR":
-                self.before_using[1][1] = self.mem[self.buffer[1][1]]
+                self.before_using[1][1] = self.buffer[1][1]
             elif self.before_using[1][0] == "LTM":
                 self.before_using[1][1] = self.buffer[1][1]
             elif self.before_using[1][0] in ["RTR", "RTM"]:
-                self.before_using[1][1] = self.RF[self.buffer[1][2]]
+                self.before_using[1][1] = self.buffer[1][1]
             elif self.before_using[1][0] in ["JL", "SUB", "SUM", "MTRK", "SBT", "SUMM", "MTRD"]:
-                self.before_using[1][1] = self.RF[self.buffer[1][1]]
+                self.before_using[1][1] = self.buffer[1][1]
             elif self.before_using[1][0] in ["JMP", "JUMP"]:
                 # self.operand1 = self.buffer[1][1]
                 ...
@@ -106,6 +110,9 @@ class CPU:
 
     def decode2_before(self):
         """3 такт: выборка второго операнда"""
+
+        self.curr_value_before[1] = self.operand2
+
         if self.buffer[2]:
             opcode = self.buffer[2][0]
             self.before_using[2][0] = opcode
@@ -133,32 +140,32 @@ class CPU:
                 print(f"EXECUTE_BEFORE: Выполнена операция {opcode}")
 
     def execute_ltm_before(self):
-        self.resH_before = self.curr_value[2]  # self.pipeline_operand
-        self.resL_before = self.curr_value[1]  # self.operand2
+        self.resH_before = self.curr_value_before[2]  # self.pipeline_operand
+        self.resL_before = self.curr_value_before[1]  # self.operand2
 
     def execute_mtr_before(self):
-        self.result_before = self.curr_value[1]  # self.pipeline_operand
+        self.result_before = self.curr_value_before[1]  # self.pipeline_operand
 
     def execute_rtr_before(self):
-        self.result_before = self.curr_value[0]  # self.pipeline_operand
+        self.result_before = self.curr_value_before[0]  # self.pipeline_operand
 
     def execute_jl_before(self):
-        self.result_before = (self.curr_value[0] < self.curr_value[1])
+        self.result_before = (self.curr_value_before[0] < self.curr_value_before[1])
         print(
-            f"JL: RF[{self.curr_value[2]}]={self.curr_value[0]} < RF[{self.curr_value[1]}]={self.curr_value[1]} -> {self.result}")
+            f"JL: RF[{self.curr_value_before[2]}]={self.curr_value_before[0]} < RF[{self.curr_value_before[1]}]={self.curr_value_before[1]} -> {self.result}")
 
     def execute_sbt_before(self):
-        self.result_before = (self.curr_value[0] - self.curr_value[1])
+        self.result_before = (self.curr_value[0] - self.curr_value_before[1])
 
     def execute_summ_before(self):
-        self.result_before = (self.curr_value[2] + self.curr_value[1])
+        self.result_before = (self.curr_value_before[2] + self.curr_value[1])
 
     def execute_mtrd_before(self):
-        self.result_before = self.curr_value[1]
+        self.result_before = self.curr_value_before[1]
 
     def execute_rtm_before(self):
-        self.resH_before = self.curr_value[0]  # self.pipeline_operand
-        self.resL_before = self.curr_value[1]  # self.operand2
+        self.resH_before = self.curr_value_before[0]  # self.pipeline_operand
+        self.resL_before = self.curr_value_before[1]  # self.operand2
 
     #3 - H  - 0
     #4 - L  - 1
@@ -181,8 +188,8 @@ class CPU:
                     self.before_using[4][1] = self.before_res[0]
                     self.before_using[4][2] = -1
             elif opcode == "LTM":
-                self.before_using[4][1] = self.before_res[0]
-                self.before_using[4][2] = self.before_res[1]
+                self.before_using[4][1] = self.buffer[4][1]
+                self.before_using[4][2] = self.buffer[4][2]
             elif opcode == "MTR":
                 self.before_using[4][1] = self.buffer[4][2]
                 self.before_using[4][2] = self.before_res[2]
@@ -212,7 +219,7 @@ class CPU:
         if self.buffer[1]:
             opcode = self.buffer[1][0]
             if opcode == "MTR":
-                if(self.before_using[1][1] != self.before_using[4][1]):
+                if(self.before_using[1][1] != self.before_using[4][1] or self.before_using[4][0] in ["RTR", "MTR", "JL", "SUB", "SUM", "MTRK", "SBT", "SUMM", "MTRD", "JMP", "JUMP"]):
                     self.pipeline_operand = self.operand1
                     print(f"DECODE1: Операнд1 = {self.pipeline_operand}")
                 else:
@@ -223,7 +230,7 @@ class CPU:
                 self.operand1 = self.buffer[1][1]
                 print(f"DECODE1: Операнд1 = {self.operand1}")
             elif opcode in ["RTR", "RTM"]:
-                if(self.before_using[1][1] != self.before_using[4][1]):
+                if(self.before_using[1][1] != self.before_using[4][1] or self.before_using[4][0] in ["LTM","RTM"]):
                     self.pipeline_operand = self.operand1
                     self.operand1 = self.RF[self.buffer[1][2]]
                     print(f"DECODE1: Операнд1 = {self.operand1}")
@@ -406,6 +413,10 @@ class CPU:
         print(f"Result: {self.result}")
         print(f"Result H: {self.resH}")
         print(f"Result L: {self.resL}")
+        print(f"before_res_H: {self.before_res[0]}")
+        print(f"before_res_L: {self.before_res[1]}")
+        print(f"before_res: {self.before_res[2]}")
+        print(f"result_before: {self.result_before}")
         print(f"Buffer: {self.buffer}")
         print(f"before_using: {self.before_using}")
         print(f"curr_val: {self.curr_value}")
@@ -430,14 +441,14 @@ program = [
     #по идеи должен быть nop
     ["MTR", 3, 3],  # 6: RF[3] = mem[RF[3]]
     ["NOP"], #ОПРАВДАН
-    ["JL", 2, 3, 41],  # 8 if ~(RF[2] < RF[3]) jump to 26
+    ["JL", 2, 3, 40],  # 8 if ~(RF[2] < RF[3]) jump to 26
     ["NOP"],  #ОПРАВДАН
     ["RTR", 4, 0],  # 10: RF[4] = RF[0]
-    #["NOP"],   11
+    ["NOP"],   #11
     ["SBT", 3, 2, 5],  # 12: RF[5] = RF[3] - RF[2]
     ["NOP"],  # 13
     ["NOP"],  # 14: NOP
-    ["JL", 4, 5, 38],  # 15: if ~(RF[4] < RF[5]) jump to 18
+    ["JL", 4, 5, 37],  # 15: if ~(RF[4] < RF[5]) jump to 18
     ["SUMM", 4, 1, 6],  # 16: RF[6] = RF[4] + RF[1]
     ["NOP"],  # 17
     ["MTRD", 4, 7],  # 18: RF[4] = mem[RF[7]]
@@ -446,17 +457,18 @@ program = [
     ["NOP"],  # 21: NOP
     ["NOP"],  # 22: NOP
     ["NOP"],  # 23
-    ["JL", 8, 7, 32],  # 24: if ~(RF[7] < RF[8]) jump to 16
+    ["JL", 8, 7, 31],  # 24: if ~(RF[7] < RF[8]) jump to 16
     ["NOP"],  # 25
     ["NOP"],  # 26
     ["NOP"],  #27 
+    ["NOP"],
     ["RTM", 8, 4],  # 28: mem[RF[4]] = RF[8]
     ["NOP"],  # 29
     ["RTM", 7, 6],  # 30: mem[RF[6]] = RF[7]
     ["NOP"],  # 31
     ["NOP"],  # 32
     ["RTR", 4, 6],  # 33: RF[4] = RF[6]
-    ["JUMP", 11],  # 34: jump to 8
+    ["JUMP", 10],  # 34: jump to 8
     ["NOP"],  # 35
     ["NOP"],  # 36
     ["NOP"],  # 37
