@@ -95,12 +95,16 @@ class CPU:
             opcode = self.buffer[1][0]
             self.before_using[1][0] = opcode
             if self.before_using[1][0] == "MTR":
-                self.before_using[1][1] = self.buffer[1][1]
+                self.before_using[1][1] = self.buffer[1][2]
             elif self.before_using[1][0] == "LTM":
                 self.before_using[1][1] = self.buffer[1][1]
-            elif self.before_using[1][0] in ["RTR", "RTM"]:
+            elif self.before_using[1][0] in ["RTR"]:
                 self.before_using[1][1] = self.buffer[1][1]
-            elif self.before_using[1][0] in ["JL", "SUB", "SUM", "MTRK", "SBT", "SUMM", "MTRD"]:
+            elif self.before_using[1][0] in ["RTM"]:
+                self.before_using[1][1] = self.RF[self.buffer[1][2]]
+            elif self.before_using[1][0] in ["JL", "MTRK", "SBT", "SUMM"]:
+                self.before_using[1][1] = self.buffer[1][1]
+            elif self.before_using[1][0] in ["MTRD"]:
                 self.before_using[1][1] = self.buffer[1][1]
             elif self.before_using[1][0] in ["JMP", "JUMP"]:
                 # self.operand1 = self.buffer[1][1]
@@ -119,8 +123,8 @@ class CPU:
             if opcode in ["LTM"]:
                 self.before_using[2][1] = self.buffer[2][2]  # Literal value
             elif opcode in ["MTRK", "MTRD"]:
-                self.before_using[2][1] = self.mem[self.operand1]
-            elif opcode in ["JL", "SUB", "SUM", "SUMM", "SBT"]:
+                self.before_using[2][1] = self.mem[self.curr_value_before[0]]
+            elif opcode in ["JL", "SUMM", "SBT"]:
                 self.before_using[2][1] = self.buffer[2][2]
             elif opcode == "RTM":
                 self.before_using[2][1] = self.buffer[2][1]
@@ -219,7 +223,7 @@ class CPU:
         if self.buffer[1]:
             opcode = self.buffer[1][0]
             if opcode == "MTR":
-                if(self.before_using[1][1] != self.before_using[4][1] or self.before_using[4][0] in ["RTR", "MTR", "JL", "SUB", "SUM", "MTRK", "SBT", "SUMM", "MTRD", "JMP", "JUMP"]):
+                if(self.before_using[1][1] != self.before_using[4][1] or self.before_using[4][0] in ["RTR", "MTR", "JL", "SBT", "SUMM", "MTRD", "JUMP"]):
                     self.pipeline_operand = self.operand1
                     print(f"DECODE1: Операнд1 = {self.pipeline_operand}")
                 else:
@@ -260,7 +264,7 @@ class CPU:
             if opcode in ["LTM"]:
                 self.operand2 = self.buffer[2][2]  # Literal value
                 print(f"DECODE2: Literal = {self.operand2}")
-            elif opcode in ["MTRK", "MTRD"]:
+            elif opcode in ["MTRD"]:
                 self.operand2 = self.mem[self.operand1]
                 print(f"DECODE2: Операнд2 = {self.operand2}")
             elif opcode in ["JL", "SUB", "SUM", "SUMM", "SBT"]:
@@ -356,7 +360,7 @@ class CPU:
         self.result = self.curr_value[0]  # self.pipeline_operand
 
     def execute_jl(self):
-        self.result = (self.curr_value[0] < self.curr_value[1])
+        self.result = (self.curr_value[2] < self.curr_value[1])
         print(
             f"JL: RF[{self.curr_value[2]}]={self.curr_value[0]} < RF[{self.curr_value[1]}]={self.curr_value[1]} -> {self.result}")
 
@@ -438,56 +442,48 @@ program = [
     ["LTM", 2, 3],  # 3: mem[2] = 3
     ["LTM", 3, 3],  # 4: mem[3] = 3
     ["RTR", 2, 1],  # 5: RF[2] = RF[0]
-    #по идеи должен быть nop
     ["MTR", 3, 3],  # 6: RF[3] = mem[RF[3]]
-    ["NOP"], #ОПРАВДАН
-    ["JL", 2, 3, 40],  # 8 if ~(RF[2] < RF[3]) jump to 26
-    ["NOP"],  #ОПРАВДАН
+    ["NOP"], #ОПРАВДАН 7
+    ["JL", 2, 3, 36],  # 8 if ~(RF[2] < RF[3]) jump to 26
     ["RTR", 4, 0],  # 10: RF[4] = RF[0]
     ["NOP"],   #11
     ["SBT", 3, 2, 5],  # 12: RF[5] = RF[3] - RF[2]
-    ["NOP"],  # 13
-    ["NOP"],  # 14: NOP
-    ["JL", 4, 5, 37],  # 15: if ~(RF[4] < RF[5]) jump to 18
-    ["SUMM", 4, 1, 6],  # 16: RF[6] = RF[4] + RF[1]
-    ["NOP"],  # 17
-    ["MTRD", 4, 7],  # 18: RF[4] = mem[RF[7]]
-    ["NOP"],  # 19 
-    ["MTRD", 6, 8],  # 20: RF[6] = mem[RF[8]]
-    ["NOP"],  # 21: NOP
-    ["NOP"],  # 22: NOP
+    ["NOP"],  # 13: NOP
+    ["JL", 4, 5, 34],  # 14: if ~(RF[4] < RF[5]) jump to 18
+    ["SUMM", 4, 1, 6],  # 15: RF[6] = RF[4] + RF[1]
+    ["NOP"],  # 16
+    ["MTRD", 4, 7],  # 17: RF[4] = mem[RF[7]]
+    ["NOP"],  # 18
+    ["MTRD", 6, 8],  # 19: RF[6] = mem[RF[8]]
+    ["NOP"],  # 20: NOP
+    ["NOP"],  # 21
+    ["JL", 8, 7, 28],  # 22: if ~(RF[7] < RF[8]) jump to 16
     ["NOP"],  # 23
-    ["JL", 8, 7, 31],  # 24: if ~(RF[7] < RF[8]) jump to 16
-    ["NOP"],  # 25
-    ["NOP"],  # 26
-    ["NOP"],  #27 
-    ["NOP"],
-    ["RTM", 8, 4],  # 28: mem[RF[4]] = RF[8]
+    ["NOP"],  #24
+    ["NOP"], #25
+    ["RTM", 8, 4],  # 26: mem[RF[4]] = RF[8]
+    ["NOP"],  # 27
+    ["RTM", 7, 6],  # 28: mem[RF[6]] = RF[7]
     ["NOP"],  # 29
-    ["RTM", 7, 6],  # 30: mem[RF[6]] = RF[7]
-    ["NOP"],  # 31
+    ["RTR", 4, 6],  # 30: RF[4] = RF[6]
+    ["JUMP", 11],  # 31: jump to 8
     ["NOP"],  # 32
-    ["RTR", 4, 6],  # 33: RF[4] = RF[6]
-    ["JUMP", 10],  # 34: jump to 8
+    ["NOP"],  # 33
+    ["NOP"],  # 34
     ["NOP"],  # 35
-    ["NOP"],  # 36
-    ["NOP"],  # 37
-    ["NOP"],  # 38
-    ["NOP"],  # 39
-    ["SUMM", 2, 1, 2],  # 40: RF[1] = RF[2] + RF[2]
-    ["JUMP", 7],  # 41: jump to 6
-    ["NOP"],#42
-    ["NOP"],#43
-    ["NOP"],#44
-    ["NOP"],#45
-    ["NOP"],
+    ["SUMM", 2, 1, 2],  # 36: RF[1] = RF[2] + RF[2]
+    ["JUMP", 7],  # 37: jump to 6
+    ["NOP"],#38
+    ["NOP"],#39
+    ["NOP"],#40
+    ["NOP"],#41
 ]
 cpu.load_program(program)
 
 print("НАЧАЛЬНОЕ СОСТОЯНИЕ:")
 cpu.print_state()
 
-max_instructions = 200
+max_instructions = 400
 instructions_executed = 0
 
 while cpu.PC < len(cpu.cmd_mem) and instructions_executed < max_instructions:
